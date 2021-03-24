@@ -3,7 +3,10 @@ FROM mcr.microsoft.com/dotnet/sdk:5.0-alpine AS build
 WORKDIR /app
 
 
-COPY *.csproj ./
+COPY ./BeautyAtHome/BeautyAtHome.csproj ./BeautyAtHome/
+COPY ./ApplicationCore/ApplicationCore.csproj ./ApplicationCore/
+COPY ./Infrastructure/Infrastructure.csproj ./Infrastructure/
+COPY ./BeautyAtHome.sln .
 
 RUN dotnet restore
 
