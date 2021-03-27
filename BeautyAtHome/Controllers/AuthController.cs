@@ -59,6 +59,64 @@ namespace BeautyAtHome.Controllers
             return Ok("test");
         }
 
+        [HttpPost("register")]
+        [Produces("application/json")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<ActionResult> RegisterAccount([FromForm] AccountFormDataCM account)
+        {
+            if (string.IsNullOrEmpty(account.Email))
+            {
+                return BadRequest();
+            }
+
+            Account accountCreated = _accountService.GetByEmail(account.Email);
+            if(accountCreated != null)
+            {
+                return BadRequest("Email exists");
+            }
+
+            accountCreated = _mapper.Map<Account>(account);
+            List<Image> listImgAvatar = new List<Image>();
+            List<Image> listImgCertificates = new List<Image>();
+            if (account.ImagesAvatar != null)
+            {
+                foreach (IFormFile file in account.ImagesAvatar)
+                {
+                    string avatar = await _uploadFileService.UploadFile("token", file, "customer", "avatar");
+                    Image image = new Image();
+                    image.ImageUrl = avatar;
+                    image.Description = "customer-avatar";
+                    listImgAvatar.Add(image);
+                }
+            }
+            if(account.ImagesCertificates != null)
+            {
+                foreach (IFormFile file in account.ImagesAvatar)
+                {
+                    string certificate = await _uploadFileService.UploadFile("token", file, "customer", "certificates");
+                    Image image = new Image();
+                    image.ImageUrl = certificate;
+                    image.Description = "customer-certificates";
+                    listImgAvatar.Add(image);
+                }
+            }
+            listImgAvatar.AddRange(listImgCertificates);
+            accountCreated.Gallery = new Gallery()
+            {
+                Images = listImgAvatar,
+                Description = accountCreated.DisplayName + "_Info",
+                Name = "Ảnh cá nhân"
+            };
+
+            accountCreated.Status = "NEW";
+            accountCreated.Role = "WORKER";
+            accountCreated.IsBeautyArtist = true;
+            
+            await _accountService.AddAsync(accountCreated);
+            await _accountService.Save();
+            
+            return Ok("Đăng ký tài khoản thành công");
+        }
 
 
         [HttpPost("login")]
@@ -88,11 +146,11 @@ namespace BeautyAtHome.Controllers
             {
                 //string email = "maiquynhanh@gmail.com";
                 Account accountCreated = _accountService.GetByEmail(email);
-                
+
                 if (accountCreated == null)
                 {
                     Gallery gallery = null;
-                    if(authCM.Avatar != null)
+                    if (authCM.Avatar != null)
                     {
                         gallery = new Gallery()
                         {
@@ -114,12 +172,22 @@ namespace BeautyAtHome.Controllers
                         Email = email,
                         Role = Constants.Role.ADMIN,
                         Status = Constants.AccountStatus.ACTIVE,
-                        Gallery = gallery
+                        Gallery = gallery,
+                        IsBeautyArtist = true
                     };
                     await _accountService.AddAsync(accountCreated);
                     await _accountService.Save();
                 }
+                else
+                {
+                    if (!accountCreated.Status.Equals("ACTIVE"))
+                    {
+                        return BadRequest();
+                    }
+                }
+
                 
+
                 string role = accountCreated.Role;
                 if (role != authCM.LoginType)
                 {
@@ -132,11 +200,17 @@ namespace BeautyAtHome.Controllers
                 {
                     Uid = accountCreated.Id,
                     DisplayName = accountCreated.DisplayName,
+                    Email = accountCreated.Email,
+                    Phone = accountCreated.Phone,
                     Role = accountCreated.Role,
                     AccessToken = accessToken,
                     ExpiresIn = Constants.EXPIRES_IN_DAY,
                     Gallery = _mapper.Map<GalleryVM>(accountCreated.Gallery)
                 };
+                if (accountCreated.Role.Equals("ADMIN"))
+                {
+                    response.Addresses = accountCreated.Addresses;
+                }
             }
             catch (Exception e)
             {
